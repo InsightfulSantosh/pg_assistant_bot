@@ -37,18 +37,15 @@ def rewrite_user_question(user_input: str, df: pd.DataFrame, model_name: str = "
     You are a question rewriter that aligns user input with actual dataset structure.
 
     Rewrite the user's question using:
-    - Only column names from the dataset.
-    - Only values from the dataset (as provided below).
-
-    ## Requirements:
-    - Use exact column names provided in the list.
-    - Use representative values exactly as provided.
-    - Format column names using backticks.
-    - Format values using single quotes.
+    - Only column names from the dataset when possible.
+    - Only values from the dataset (as provided below), unless they are common formats like dates.
+    - If a column is not listed but clearly resembles a known one (e.g., 'join date'), retain it and correct the spelling minimally (e.g., `Join_Date`).
+    - If a column or value is not listed and cannot be confidently corrected, preserve it as-is (do not reject or warn).
+    - Use exact formatting:
     - Match user typos or approximations to the closest known values.
-    - Do not introduce new columns or values.
-    - Keep pronouns like "they", "those", "their","that","above","that","them" unchanged.
-    - Respond only with the corrected question.
+    - Do not introduce new columns or values unless inferred with high confidence.
+    - Keep pronouns like "they", "those", "their", "that", "above", "them" unchanged.
+    - For dates like '2023-08-16', accept and retain them even if not listed in values.
 
     ## Column Names:
     {columns}
