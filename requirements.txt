@@ -1,0 +1,15 @@
+pandas
+langchain
+langchain_google_genai
+langchain-community
+langchain-huggingface
+sentence-transformers
+langchain_experimental
+faiss-cpu
+
+faker
+streamlit
+tabulate
+matplotlib
+seaborn 
+plotly
