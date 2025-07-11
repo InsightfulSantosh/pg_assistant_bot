@@ -44,7 +44,7 @@ def get_fuzzy_matches(
     user_input: str,
     candidates: List[str],
     case_map: Dict[str, str],
-    cutoff=0.65
+    cutoff=0.90
 ) -> Dict[str, str]:
     """Returns a mapping of user phrases to dataset-correct casing via fuzzy match."""
     matches = {}
@@ -118,30 +118,33 @@ class RewriteQuestionTool(BaseTool):
 
         # Build prompt
         template = """
-You are a MINIMAL question rewriter. Your ONLY job is to fix obvious typos in column names and values.
+You are a MINIMAL question rewriter. Your ONLY job is to fix obvious typos in column names and values and provide output in lower case and singular form.
 
 🚫 ABSOLUTELY FORBIDDEN:
 - DO NOT expand numerical references like "top N", "bottom N", "first N", "last N", etc.
-- DO NOT replace referent words: "there", "those", "them", "these", "that"
-- DO NOT resolve references to specific values (don't expand vague references to actual data)
-- DO NOT improve grammar , verb form or sentence structure
+- DO NOT replace or resolve referent words: "there", "those", "them", "these", "that", "above", "their"
+- DO NOT infer or expand vague references to actual values
+- DO NOT improve grammar, verb form, or sentence structure
 - DO NOT add explanations or extra words
-- DO NOT change the meaning or intent
+- DO NOT change meaning or intent
+- DO NOT output plural forms if plural is present—convert to singular (e.g., "boys" → "boy", "tries" → "try", "cities" → "city")
 
 ✅ ONLY ALLOWED:
-- Fix obvious typos in column names 
-- Fix obvious typos in values 
+- Fix obvious typos in column names and values
+- Convert plural to singular where applicable
 - Use exact casing from the lists below
 
 1. **Column Matching**
    - Use only the column names listed below.
-   - Correct approximate column names to the closest actual column.
-   - Do not invent or infer new columns beyond what's listed.
+   - Format column names using single quotes.
+   - Match typos or plurals to the closest actual column name.
+   - Do not invent or infer new columns.
 
 2. **Value Matching**
-   - Use only the representative values provided below.
-   - Fix typos or fuzzy matches to the closest known value when clear.
-   - Use the exact casing shown below.
+   - Use only the values listed below.
+   - Format values using single quotes.
+   - Match typos or plurals to the closest actual value.
+   - Use the exact casing shown.
 
 DETECTED PATTERNS TO PRESERVE: {forbidden_patterns}
 DETECTED REFERENTS TO PRESERVE: {present_forbidden}
@@ -152,6 +155,7 @@ Values: {unique_values}
 User Question: {corrected_input}
 
 Rewritten Question (FIX TYPOS ONLY):""".strip()
+
 
         prompt = PromptTemplate.from_template(template)
         chain = prompt | self._llm | StrOutputParser()
