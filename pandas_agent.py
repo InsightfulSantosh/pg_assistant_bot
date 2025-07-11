@@ -26,17 +26,22 @@ class SmartPandasAgent:
         self._load()
         self._build_agent_tool()
 
+    def _normalize_df(self, df):
+        df.columns = df.columns.str.lower()
+        return df.applymap(lambda x: x.lower() if isinstance(x, str) else x)
+
     def _load(self):
-        self.df_full = pd.read_csv(self.csv_path)
+        self.df_full = self._normalize_df(pd.read_csv(self.csv_path))
         self.df = self.df_full.copy()
 
         system_prompt = """
-You are a data analysis assistant. You will be asked questions about a pandas DataFrame `df`.
-- Always assume df is already filtered as needed.
-- Do not apply additional filtering logic.
-- If asked about top/bottom/maximum/minimum/average/etc., infer and compute intelligently using pandas.
-- Do not guess column names; use only those in df.
-"""
+        You are a data analysis assistant. You will be asked questions about a pandas DataFrame `df`.
+        - ALWAYS answer using the actual contents of df. Do not guess or generalize.
+        - df is already filtered before your input.
+        - You MUST compute answers directly from df using pandas operations.
+        - You may assume df contains the relevant rows, and always give a best-effort answer.
+        - If asked for counts, summaries, or details, return a clear result from df.
+        """
 
         self.llm = ChatGoogleGenerativeAI(
             model=self.model_name,
@@ -68,7 +73,7 @@ You are a data analysis assistant. You will be asked questions about a pandas Da
         )
 
     def reset_filters(self):
-        self.df = self.df_full.copy()
+        self.df = self._normalize_df(self.df_full.copy())
         self.current_filters = {}
         self.last_entity_memory = {}
         self._build_agent_tool()
@@ -113,6 +118,7 @@ You are a data analysis assistant. You will be asked questions about a pandas Da
 
         self.current_filters.update(new_filters)
 
+        print(f"[DEBUG] Applying filters on df: {self.current_filters}")
         self.df = self.df_full.copy()
         for col, val in self.current_filters.items():
             if col in self.df.columns:
@@ -120,7 +126,10 @@ You are a data analysis assistant. You will be asked questions about a pandas Da
                     pattern = '|'.join([re.escape(str(v)) for v in val])
                     self.df = self.df[self.df[col].astype(str).str.contains(pattern, case=False, na=False)]
                 else:
-                    self.df = self.df[self.df[col].astype(str).str.lower() == str(val).lower()]
+                    self.df = self.df[self.df[col].astype(str).str.contains(re.escape(str(val)), case=False, na=False)]
+
+        print(f"[DEBUG] Filtered df shape: {self.df.shape}")
+        print(f"[DEBUG] Top 5 rows:\n{self.df.head()}")
 
         if self.df.empty:
             if retry:
@@ -168,15 +177,16 @@ You are a data analysis assistant. You will be asked questions about a pandas Da
                 self.reset_filters()
                 return "Filters cleared. You can start fresh.", None
 
-            if self._check_for_global_query(question):
+            is_global_query = self._check_for_global_query(question)
+            if is_global_query:
                 print("[INFO] Global context detected, resetting filters.")
                 self.reset_filters()
-
-            self._apply_context_filter(question)
-            self._apply_combined_entity_memory_filter()
+            else:
+                self._apply_context_filter(question)
+                self._apply_combined_entity_memory_filter()
 
             rewritten = self._rewrite_with_context(question)
-            result = self.langchain_agent.run(rewritten)
+            result = self.agent_tool.run(rewritten)
 
             self._update_entity_memory_from_output(result, question)
 

@@ -38,6 +38,9 @@ def create_rag_system(csv_path, memory):
 
             if os.path.exists(csv_path):
                 df = pd.read_csv(csv_path)
+                # Convert column names and string values to lowercase
+                df.columns = df.columns.str.lower()
+                df = df.applymap(lambda x: x.lower() if isinstance(x, str) else x)
 
                 for idx, row in df.iterrows():
                     content = f"""PG Record {idx + 1}:
