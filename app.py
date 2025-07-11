@@ -4,6 +4,7 @@ from collections import Counter
 
 from initialize import setup_hybrid_system as initialize_system
 from hybrid_query import hybrid_query
+from question_parser import rewrite_user_question
 
 
 st.set_page_config(page_title="PG Assistant", layout="wide")
@@ -29,7 +30,7 @@ def main():
         else:
             st.info("No conversation yet.")
 
-    csv_path = "data/professionals_in_pg.csv"
+    csv_path = "data/formated_data/professionals_in_pg.csv"
     df = load_csv(csv_path)
 
     # Always reinitialize for safety
@@ -56,17 +57,18 @@ def main():
     user_input = st.chat_input("Ask a question about PG data...")
     if user_input:
         question = user_input.strip()
+        rewritten_question = rewrite_user_question(question, df)
 
         # Display user message
-        st.session_state.chat_history.append({"role": "user", "content": question})
-        memory.chat_memory.add_user_message(question)
+        st.session_state.chat_history.append({"role": "user", "content": rewritten_question})
+        memory.chat_memory.add_user_message(rewritten_question)
         with st.chat_message("user"):
-            st.markdown(question)
+            st.markdown(rewritten_question)
 
         # Generate answer
         with st.chat_message("assistant"):
             try:
-                result = hybrid_query(question, pandas_agent, rag_system, memory)
+                result = hybrid_query(rewritten_question, pandas_agent, rag_system, memory)
                 st.markdown(f"_(Rewritten question: {result[2] if isinstance(result, tuple) and len(result) == 3 else 'N/A'})_")
 
                 if isinstance(result, tuple):

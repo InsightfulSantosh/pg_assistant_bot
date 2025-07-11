@@ -38,29 +38,27 @@ def create_rag_system(csv_path, memory):
 
             if os.path.exists(csv_path):
                 df = pd.read_csv(csv_path)
-                # Convert column names and string values to lowercase
-                df.columns = df.columns.str.lower()
-                df = df.applymap(lambda x: x.lower() if isinstance(x, str) else x)
+
 
                 for idx, row in df.iterrows():
                     content = f"""PG Record {idx + 1}:
-                            - ID: {row.get('ID', 'N/A')}
-                            - Name: {row.get('Name', 'N/A')}
-                            - Age: {row.get('Age', 'N/A')}
-                            - Gender: {row.get('Gender', 'N/A')}
-                            - Profession: {row.get('Profession', 'N/A')}
-                            - Profession Category: {row.get('Profession_Category', 'N/A')}
-                            - Company: {row.get('Company', 'N/A')}
-                            - Working Mode: {row.get('Working_Mode', 'N/A')}
-                            - City: {row.get('City', 'N/A')}
-                            - PG Name: {row.get('PG_Name', 'N/A')}
-                            - PG Type: {row.get('PG_Type', 'N/A')}
-                            - Languages Spoken: {row.get('Languages_Spoken', 'N/A')}
-                            - Rent (INR): {row.get('Rent (INR)', 'N/A')}
-                            - Stay Duration (Months): {row.get('Stay_Duration_Months', 'N/A')}
-                            - Join Date: {row.get('Join_Date', 'N/A')}
-                            - PG Rating: {row.get('PG_Rating', 'N/A')}
-                            - Amenities Used: {row.get('Amenities_Used', 'N/A')}"""
+                            - ID: {row.get('id', 'N/A')}
+                            - Name: {row.get('name', 'N/A')}
+                            - Age: {row.get('age', 'N/A')}
+                            - Gender: {row.get('gender', 'N/A')}
+                            - Profession: {row.get('profession', 'N/A')}
+                            - Profession Category: {row.get('profession_category', 'N/A')}
+                            - Company: {row.get('company', 'N/A')}
+                            - Working Mode: {row.get('working_mode', 'N/A')}
+                            - City: {row.get('city', 'N/A')}
+                            - PG Name: {row.get('pg_name', 'N/A')}
+                            - PG Type: {row.get('pg_type', 'N/A')}
+                            - Languages Spoken: {row.get('languages_spoken', 'N/A')}
+                            - Rent (INR): {row.get('rent (inr)', 'N/A')}
+                            - Stay Duration (Months): {row.get('stay_duration_months', 'N/A')}
+                            - Join Date: {row.get('join_date', 'N/A')}
+                            - PG Rating: {row.get('pg_rating', 'N/A')}
+                            - Amenities Used: {row.get('amenities_used', 'N/A')}"""
 
                     structured_docs.append(Document(
                         page_content=content.strip(),
@@ -209,7 +207,7 @@ def query_rag(qa_chain, question, memory=None):
         
         result = qa_chain.invoke({"question": question})
         if question.strip().lower() in {"hi", "hello", "hey"}:
-            return "Hello! How can I assist you with the PG dataset today?"
+            return "Hello! How can I assist you with the  dataset today?"
         return result["answer"]
     
     except Exception as e:

@@ -26,22 +26,17 @@ class SmartPandasAgent:
         self._load()
         self._build_agent_tool()
 
-    def _normalize_df(self, df):
-        df.columns = df.columns.str.lower()
-        return df.applymap(lambda x: x.lower() if isinstance(x, str) else x)
-
     def _load(self):
-        self.df_full = self._normalize_df(pd.read_csv(self.csv_path))
+        self.df_full = pd.read_csv(self.csv_path)
         self.df = self.df_full.copy()
 
         system_prompt = """
-        You are a data analysis assistant. You will be asked questions about a pandas DataFrame `df`.
-        - ALWAYS answer using the actual contents of df. Do not guess or generalize.
-        - df is already filtered before your input.
-        - You MUST compute answers directly from df using pandas operations.
-        - You may assume df contains the relevant rows, and always give a best-effort answer.
-        - If asked for counts, summaries, or details, return a clear result from df.
-        """
+You are a data analysis assistant. You will be asked questions about a pandas DataFrame `df`.
+- Always assume df is already filtered as needed.
+- Do not apply additional filtering logic.
+- If asked about top/bottom/maximum/minimum/average/etc., infer and compute intelligently using pandas.
+- Do not guess column names; use only those in df.
+"""
 
         self.llm = ChatGoogleGenerativeAI(
             model=self.model_name,
@@ -63,7 +58,7 @@ class SmartPandasAgent:
                 Tool(
                     name="Pandas DataFrame Tool",
                     func=lambda q: self.agent_tool.run(q),
-                    description="Use this tool to analyze the DataFrame `df` using pandas. The df is already filtered if needed."
+                    description="Use this tool to analyze the DataFrame `df` using pandas. The DataFrame has already been filtered as needed, and all column names and string values are in lowercase."
                 )
             ],
             llm=self.llm,
@@ -73,7 +68,7 @@ class SmartPandasAgent:
         )
 
     def reset_filters(self):
-        self.df = self._normalize_df(self.df_full.copy())
+        self.df = self.df_full.copy()
         self.current_filters = {}
         self.last_entity_memory = {}
         self._build_agent_tool()
@@ -88,7 +83,7 @@ class SmartPandasAgent:
                     pattern = '|'.join([re.escape(str(v)) for v in val])
                 else:
                     pattern = re.escape(str(val))
-                self.df = self.df[self.df[col].astype(str).str.contains(pattern, case=False, na=False)]
+                self.df = self.df[self.df[col].astype(str).str.contains(pattern, na=False)]
 
         print(f"[DEBUG] Filtered df shape: {self.df.shape}")
         self._build_agent_tool()
@@ -106,7 +101,7 @@ class SmartPandasAgent:
         new_filters = {}
         for col in self.df_full.columns:
             unique_values = self.df_full[col].dropna().astype(str).unique().tolist()
-            matches = [val for val in unique_values if str(val).lower() in lowered_query]
+            matches = [val for val in unique_values if str(val) in lowered_query]
             if matches:
                 new_filters[col] = matches[0] if len(matches) == 1 else matches
 
@@ -118,7 +113,6 @@ class SmartPandasAgent:
 
         self.current_filters.update(new_filters)
 
-        print(f"[DEBUG] Applying filters on df: {self.current_filters}")
         self.df = self.df_full.copy()
         for col, val in self.current_filters.items():
             if col in self.df.columns:
@@ -126,10 +120,7 @@ class SmartPandasAgent:
                     pattern = '|'.join([re.escape(str(v)) for v in val])
                     self.df = self.df[self.df[col].astype(str).str.contains(pattern, case=False, na=False)]
                 else:
-                    self.df = self.df[self.df[col].astype(str).str.contains(re.escape(str(val)), case=False, na=False)]
-
-        print(f"[DEBUG] Filtered df shape: {self.df.shape}")
-        print(f"[DEBUG] Top 5 rows:\n{self.df.head()}")
+                    self.df = self.df[self.df[col].astype(str) == str(val)]
 
         if self.df.empty:
             if retry:
@@ -186,7 +177,7 @@ class SmartPandasAgent:
                 self._apply_combined_entity_memory_filter()
 
             rewritten = self._rewrite_with_context(question)
-            result = self.agent_tool.run(rewritten)
+            result = self.langchain_agent.run(rewritten)
 
             self._update_entity_memory_from_output(result, question)
 

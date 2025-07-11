@@ -15,14 +15,36 @@ FORBIDDEN_REFERENTS: Set[str] = {
     "dataset", "entire data", "whole data", "full data"
 }
 
+# Patterns that should NEVER be expanded or resolved
+FORBIDDEN_PATTERNS = [
+    r'\btop\s+\d+\b',           # top 5, top 10, etc.
+    r'\bbottom\s+\d+\b',        # bottom 3, bottom 7, etc.
+    r'\bfirst\s+\d+\b',         # first 2, first 8, etc.
+    r'\blast\s+\d+\b',          # last 4, last 6, etc.
+    r'\bhighest\s+\d+\b',       # highest 5, etc.
+    r'\blowest\s+\d+\b',        # lowest 3, etc.
+    r'\btop\s+\w+\b',           # top few, top many, etc.
+    r'\bbest\s+\d+\b',          # best 5, etc.
+    r'\bworst\s+\d+\b',         # worst 3, etc.
+]
+
 def extract_forbidden_terms(text: str) -> List[str]:
-    return [word for word in FORBIDDEN_REFERENTS if word in text.lower()]
+    forbidden = [word for word in FORBIDDEN_REFERENTS if word in text.lower()]
+    return forbidden
+
+def detect_forbidden_patterns(text: str) -> List[str]:
+    """Detect patterns that should never be expanded (e.g., 'top 5', 'bottom 3')"""
+    detected = []
+    for pattern in FORBIDDEN_PATTERNS:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        detected.extend(matches)
+    return detected
 
 def get_fuzzy_matches(
     user_input: str,
     candidates: List[str],
     case_map: Dict[str, str],
-    cutoff=0.75
+    cutoff=0.65
 ) -> Dict[str, str]:
     """Returns a mapping of user phrases to dataset-correct casing via fuzzy match."""
     matches = {}
@@ -55,7 +77,7 @@ class RewriteQuestionTool(BaseTool):
         self,
         date_threshold: float = 0.8,
         freq_threshold: float = 0.1,
-        topn: int = 30
+        topn: int = 50
     ) -> Tuple[List[str], List[str]]:
         obj_df = self._df.select_dtypes(include="object")
         date_cols = []
@@ -90,18 +112,26 @@ class RewriteQuestionTool(BaseTool):
         for old, new in fuzzy_replacements.items():
             corrected_input = re.sub(rf"\b{re.escape(old)}\b", new, corrected_input, flags=re.IGNORECASE)
 
-        # Detect forbidden referents to be preserved
+        # Detect forbidden referents and patterns to be preserved
         present_forbidden = extract_forbidden_terms(user_input)
+        forbidden_patterns = detect_forbidden_patterns(user_input)
 
         # Build prompt
         template = """
-You are a strict question rewriter that aligns user queries precisely to the dataset's schema and known values.
+You are a MINIMAL question rewriter. Your ONLY job is to fix obvious typos in column names and values.
 
-Your job is to rewrite the user's question by strictly following these rules:
+🚫 ABSOLUTELY FORBIDDEN:
+- DO NOT expand numerical references like "top N", "bottom N", "first N", "last N", etc.
+- DO NOT replace referent words: "there", "those", "them", "these", "that"
+- DO NOT resolve references to specific values (don't expand vague references to actual data)
+- DO NOT improve grammar , verb form or sentence structure
+- DO NOT add explanations or extra words
+- DO NOT change the meaning or intent
 
----
-
-### 🔒 STRICT RULES:
+✅ ONLY ALLOWED:
+- Fix obvious typos in column names 
+- Fix obvious typos in values 
+- Use exact casing from the lists below
 
 1. **Column Matching**
    - Use only the column names listed below.
@@ -113,41 +143,25 @@ Your job is to rewrite the user's question by strictly following these rules:
    - Fix typos or fuzzy matches to the closest known value when clear.
    - Use the exact casing shown below.
 
-3. **Referent Preservation**
-   - 🔴 ABSOLUTELY DO NOT reword, expand, guess, resolve, or replace these terms:
-     {forbidden_terms}
-   - They must appear exactly as in the original input.
+DETECTED PATTERNS TO PRESERVE: {forbidden_patterns}
+DETECTED REFERENTS TO PRESERVE: {present_forbidden}
 
-4. **Intent Preservation**
-   - Preserve the original meaning of the question.
-   - Return only the corrected question—no explanation or extra words.
+Column Names: {columns}
+Values: {unique_values}
 
-5. **No grammar correction**
-   - DO NOT improve the grammar or sentence structure. Only fix known column/value matches.
+User Question: {corrected_input}
 
----
-
-## Column Names:
-{columns}
-
-## Representative Values:
-{unique_values}
-
-## User Question:
-{corrected_input}
-
-## Rewritten Question:
-""".strip()
+Rewritten Question (FIX TYPOS ONLY):""".strip()
 
         prompt = PromptTemplate.from_template(template)
         chain = prompt | self._llm | StrOutputParser()
 
         rewritten = chain.invoke({
-        
             "corrected_input": corrected_input,
             "columns": ", ".join(columns),
             "unique_values": ", ".join(values),
-            "forbidden_terms": ', '.join(FORBIDDEN_REFERENTS)
+            "forbidden_patterns": ", ".join(forbidden_patterns) if forbidden_patterns else "None",
+            "present_forbidden": ", ".join(present_forbidden) if present_forbidden else "None"
         }).strip()
 
         return rewritten
@@ -158,8 +172,6 @@ def rewrite_user_question(question: str, df: pd.DataFrame) -> str:
     return RewriteQuestionTool(df)._run(question)
 
 if __name__ == "__main__":
-    df = pd.read_csv("data/professionals_in_pg.csv")
-    # Convert column names and string values to lowercase
-    df.columns = df.columns.str.lower()
-    df = df.applymap(lambda x: x.lower() if isinstance(x, str) else x)
+    df = pd.read_csv("data/formated_data/professionals_in_pg.csv")
+ 
     print(rewrite_user_question("how many profesion category in mumbay", df))

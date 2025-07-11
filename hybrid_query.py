@@ -70,25 +70,25 @@ def hybrid_query(question, pandas_agent, rag_system, memory=None, force_rag=Fals
         from rag_system import _rag_df
         df_context = _rag_df
 
-    rewritten_question = rewrite_user_question(question, df_context)
-    print(f"📝 Rewritten Question: {rewritten_question}")
+    # rewritten_question = rewrite_user_question(question, df_context)
+    print(f"📝 Parsed Question: {question}")
 
     if force_rag:
         print("Forced RAG route")
-        return query_rag(rag_system, rewritten_question, memory), None, rewritten_question
+        return query_rag(rag_system, question, memory), None, question
 
-    if is_data_analysis_query(rewritten_question) and pandas_agent:
+    if is_data_analysis_query(question) and pandas_agent:
         print("Detected as data analysis query")
-        result = pandas_agent.query(rewritten_question)
+        result = pandas_agent.query(question)
         answer, fig = result if isinstance(result, tuple) else (result, None)
         if is_failure_response(answer):
             print("Pandas agent failed, falling back to RAG")
             if memory:
                 memory.chat_memory.add_user_message(question)
                 memory.chat_memory.add_ai_message(answer)
-            return query_rag(rag_system, rewritten_question, memory), fig, rewritten_question
+            return query_rag(rag_system, question, memory), fig, question
         print("Answered by pandas agent")
-        return answer, fig, rewritten_question
+        return answer, fig, question
 
     print("Routed directly to RAG (not data-analysis or no pandas_agent)")
-    return query_rag(rag_system, rewritten_question, memory), None, rewritten_question
+    return query_rag(rag_system, question, memory), None, question

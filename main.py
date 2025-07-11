@@ -2,7 +2,7 @@ from initialize import initialize_system
 from hybrid_query import hybrid_query
 
 def main():
-    csv_path = "data/professionals_in_pg.csv"
+    csv_path = "data/formated_data/professionals_in_pg.csv"
     pandas_agent, rag_system, memory = initialize_system(csv_path)
 
     print("PG RAG Chat Assistant — type 'exit' to quit")
